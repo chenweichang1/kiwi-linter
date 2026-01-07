@@ -15,7 +15,7 @@ class KiwiSettings : PersistentStateComponent<KiwiSettings.State> {
     
     data class State(
         /** 项目 ID（用于 API 调用） */
-        var projectId: String = "3710158",
+        var projectId: String = "1696014",
         /** 目标分支 */
         var targetBranch: String = "release",
         /** 中文 properties 文件路径 */
