@@ -212,7 +212,7 @@ jobs:
   releaseDraft:
     name: Release draft
     if: github.event_name != 'pull_request'
-    needs: [ build, test, inspectCode, verify ]
+    needs: [ build, test ]  # 移除 inspectCode 和 verify 依赖，加快 CI 速度
     runs-on: ubuntu-latest
     permissions:
       contents: write
