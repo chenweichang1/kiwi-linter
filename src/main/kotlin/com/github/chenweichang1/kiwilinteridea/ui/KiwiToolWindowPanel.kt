@@ -172,21 +172,60 @@ class KiwiToolWindowPanel(private val project: Project) {
     }
     
     /**
-     * 添加条目到表格（供外部 Action 调用）
+     * 获取表格中已有的所有 Key
      */
-    fun addEntry(entry: I18nEntry) {
+    private fun getExistingKeys(): Set<String> {
+        val keys = mutableSetOf<String>()
+        for (row in 0 until tableModel.rowCount) {
+            val key = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
+            if (key.isNotBlank()) {
+                keys.add(key)
+            }
+        }
+        return keys
+    }
+    
+    /**
+     * 添加条目到表格（供外部 Action 调用）
+     * 自动去重：如果 Key 已存在，则更新值
+     */
+    fun addEntry(entry: I18nEntry): Boolean {
+        // 检查是否已存在
+        for (row in 0 until tableModel.rowCount) {
+            val existingKey = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
+            if (existingKey == entry.key) {
+                // 已存在，更新值
+                tableModel.setValueAt(entry.value, row, 1)
+                updateCount()
+                return false // 返回 false 表示是更新而非新增
+            }
+        }
+        // 不存在，添加新行
         tableModel.addRow(arrayOf(entry.key, entry.value))
         updateCount()
+        return true // 返回 true 表示是新增
     }
     
     /**
      * 批量添加条目到表格（供外部 Action 调用）
+     * 自动去重：跳过已存在的 Key
+     * @return 实际新增的条目数
      */
-    fun addEntries(entries: List<I18nEntry>) {
-        entries.forEach { entry ->
-            tableModel.addRow(arrayOf(entry.key, entry.value))
+    fun addEntries(entries: List<I18nEntry>): Int {
+        val existingKeys = getExistingKeys()
+        var addedCount = 0
+        
+        // 先对 entries 内部去重（保留最后一个）
+        val uniqueEntries = entries.associateBy { it.key }.values
+        
+        uniqueEntries.forEach { entry ->
+            if (!existingKeys.contains(entry.key)) {
+                tableModel.addRow(arrayOf(entry.key, entry.value))
+                addedCount++
+            }
         }
         updateCount()
+        return addedCount
     }
     
     /**

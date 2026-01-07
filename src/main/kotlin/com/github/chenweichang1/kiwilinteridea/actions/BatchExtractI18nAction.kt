@@ -31,19 +31,25 @@ class BatchExtractI18nAction : AnAction() {
             return
         }
         
-        // 获取工具窗口面板，直接添加到表格
+        // 获取工具窗口面板，直接添加到表格（自动去重）
         val panel = KiwiToolWindowPanel.getInstance(project)
         if (panel != null) {
-            panel.addEntries(entries)
+            val addedCount = panel.addEntries(entries)
             
             // 打开工具窗口
             val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Kiwi-linter")
             toolWindow?.show()
             
-            // 显示通知
+            // 显示通知（包含去重信息）
+            val skippedCount = entries.size - addedCount
+            val msg = if (skippedCount > 0) {
+                "已添加 $addedCount 条，跳过 $skippedCount 条重复"
+            } else {
+                "已添加 $addedCount 条文案"
+            }
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Kiwi-linter")
-                .createNotification("已添加 ${entries.size} 条文案到待提交列表", NotificationType.INFORMATION)
+                .createNotification(msg, NotificationType.INFORMATION)
                 .notify(project)
         } else {
             // 打开工具窗口

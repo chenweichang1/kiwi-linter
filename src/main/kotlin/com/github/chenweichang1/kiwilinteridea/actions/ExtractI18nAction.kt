@@ -44,19 +44,20 @@ class ExtractI18nAction : AnAction() {
             return
         }
         
-        // 获取工具窗口面板，直接添加到表格
+        // 获取工具窗口面板，直接添加到表格（自动去重）
         val panel = KiwiToolWindowPanel.getInstance(project)
         if (panel != null) {
-            panel.addEntry(entry)
+            val isNew = panel.addEntry(entry)
             
             // 打开工具窗口
             val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Kiwi-linter")
             toolWindow?.show()
             
             // 显示通知
+            val msg = if (isNew) "已添加: ${entry.key}" else "已更新: ${entry.key}"
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Kiwi-linter")
-                .createNotification("已添加: ${entry.key}", NotificationType.INFORMATION)
+                .createNotification(msg, NotificationType.INFORMATION)
                 .notify(project)
         } else {
             // 打开工具窗口
