@@ -55,6 +55,9 @@ class KiwiToolWindowPanel(private val project: Project) {
     // 保存面板引用，用于 loading 时禁用
     private lateinit var mainPanel: JPanel
     
+    // 状态标签，需要动态更新
+    private val statusLabel = JBLabel()
+    
     fun getContent(): JComponent {
         mainPanel = JPanel(BorderLayout())
         
@@ -90,16 +93,9 @@ class KiwiToolWindowPanel(private val project: Project) {
             add(countLabel)
         }
         
-        // 状态区域
-        val settings = KiwiSettings.getInstance(project)
-        val statusLabel = JBLabel().apply {
-            text = if (settings.state.projectId.isNotBlank()) {
-                "📁 项目: ${settings.state.projectId} | 分支: ${settings.state.targetBranch}"
-            } else {
-                "⚠️ 请先配置 (Settings -> Tools -> Kiwi-linter)"
-            }
-            border = JBUI.Borders.emptyTop(5)
-        }
+        // 状态区域（动态更新）
+        statusLabel.border = JBUI.Borders.emptyTop(5)
+        updateStatusLabel()
         
         // 顶部区域
         val topPanel = JPanel(BorderLayout()).apply {
@@ -190,6 +186,9 @@ class KiwiToolWindowPanel(private val project: Project) {
      * 自动去重：如果 Key 已存在，则更新值
      */
     fun addEntry(entry: I18nEntry): Boolean {
+        // 每次操作时刷新状态标签
+        updateStatusLabel()
+        
         // 检查是否已存在
         for (row in 0 until tableModel.rowCount) {
             val existingKey = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
@@ -252,6 +251,18 @@ class KiwiToolWindowPanel(private val project: Project) {
     private fun updateCount() {
         val count = getEntries().size
         countLabel.text = "共 $count 条待提交"
+    }
+    
+    /**
+     * 更新状态标签（读取最新配置）
+     */
+    private fun updateStatusLabel() {
+        val settings = KiwiSettings.getInstance(project)
+        statusLabel.text = if (settings.state.projectId.isNotBlank()) {
+            "📁 项目: ${settings.state.projectId} | 分支: ${settings.state.targetBranch}"
+        } else {
+            "⚠️ 请先配置 (Settings -> Tools -> Kiwi-linter)"
+        }
     }
     
     private fun clearTable() {
