@@ -241,6 +241,7 @@ class CodePlatformService(private val project: Project) {
      * 重建 properties 文件内容
      * 只更新本次提交的 key，其他行完全保持不变
      * 不保留空行
+     * 新增的 key 按首字母顺序插入到正确位置
      * 
      * @param originalContent 原文件内容
      * @param submittedKeys 本次提交的 key 集合（只有这些 key 会被更新）
@@ -253,6 +254,8 @@ class CodePlatformService(private val project: Project) {
     ): String {
         val resultLines = mutableListOf<String>()
         val processedKeys = mutableSetOf<String>()
+        // 记录每个 key 在结果列表中的位置，用于按顺序插入新 key
+        val keyPositions = mutableListOf<Pair<String, Int>>()
         
         // 处理原有的行，保持顺序
         originalContent.lines().forEach { line ->
@@ -274,6 +277,9 @@ class CodePlatformService(private val project: Project) {
             if (separatorIndex > 0) {
                 val key = line.substring(0, separatorIndex).trim()
                 processedKeys.add(key)
+                
+                // 记录 key 及其位置
+                keyPositions.add(key to resultLines.size)
                 
                 // 只有本次提交的 key 才会被更新，其他保持原样
                 if (submittedKeys.contains(key)) {
@@ -297,11 +303,31 @@ class CodePlatformService(private val project: Project) {
             }
         }
         
-        // 追加新增的 key（原文件中不存在的）
-        submittedEntries.forEach { (key, value) ->
-            if (!processedKeys.contains(key)) {
-                resultLines.add("$key = $value")
+        // 收集需要新增的 key（原文件中不存在的），按字母顺序排序
+        val newKeys = submittedEntries.keys
+            .filter { !processedKeys.contains(it) }
+            .sorted()
+        
+        // 将新 key 按字母顺序插入到正确位置
+        // 策略：找到第一个比新 key 大的现有 key，在其前面插入
+        var insertOffset = 0  // 因为每次插入会影响后续位置，需要记录偏移量
+        
+        for (newKey in newKeys) {
+            val newLine = "$newKey = ${submittedEntries[newKey]}"
+            
+            // 找到应该插入的位置
+            var insertIndex = resultLines.size  // 默认插入到末尾
+            
+            for ((existingKey, position) in keyPositions) {
+                if (existingKey.compareTo(newKey, ignoreCase = true) > 0) {
+                    // 找到第一个比新 key 大的 key，在其前面插入
+                    insertIndex = position + insertOffset
+                    break
+                }
             }
+            
+            resultLines.add(insertIndex, newLine)
+            insertOffset++  // 增加偏移量
         }
         
         // 用换行符连接所有行，末尾添加换行符（确保下次添加新行时不会修改原有最后一行）
