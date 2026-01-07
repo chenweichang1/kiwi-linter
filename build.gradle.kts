@@ -45,8 +45,13 @@ dependencies {
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
-        // 使用本地安装的 IntelliJ IDEA
-        local("/Applications/IntelliJ IDEA.app")
+        // CI 环境使用远程 IDE，本地开发使用本地 IDE
+        val isCI = System.getenv("CI") != null
+        if (isCI) {
+            create("IC", providers.gradleProperty("platformVersion"))
+        } else {
+            local("/Applications/IntelliJ IDEA.app")
+        }
 
         // Plugin Dependencies. Uses `platformBundledPlugins` property from the gradle.properties file for bundled IntelliJ Platform plugins.
         bundledPlugins(providers.gradleProperty("platformBundledPlugins").map { it.split(',') })
