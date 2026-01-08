@@ -13,10 +13,10 @@
 ## ✨ Features
 
 - 🔍 **Auto Extract** - Automatically detect ErrorCode enum patterns and extract key-value pairs
-- ✏️ **Manual Entry** - Manually input key-value pairs for database-stored keys
-- 📦 **Batch Extract** - Extract all I18N entries from current file at once
+- 📦 **Batch Entry** - Batch input and manage multiple I18N entries in the tool window
 - 🚀 **One-click Push** - Directly commit to remote properties repository
 - 🔄 **Smart Merge** - Automatically detect duplicates, update existing entries, skip unchanged ones
+- 🎯 **Auto Dedup** - Automatically check for duplicate keys when adding entries
 <!-- Plugin description end -->
 
 ---
@@ -86,23 +86,28 @@
 
 ## 🚀 使用方法
 
-### 方式一：右键菜单
+### 方式一：工具窗口（推荐）
 
-1. 在编辑器中选中代码或将光标放在目标行
+1. 点击 IDE 右侧边栏的 **Kiwi-linter** 图标打开工具窗口
+2. 使用快速添加区域输入 Key 和中文文案，按回车添加
+3. 也可以点击表格工具栏的 ➕ 按钮添加空行后编辑
+4. 添加完所有条目后，点击 **📤 上传** 统一提交
+
+> 💡 工具窗口会自动去重，相同 Key 的条目会更新而非重复添加
+
+### 方式二：右键菜单提取
+
+1. 在编辑器中选中包含 ErrorCode 模式的代码
 2. 右键打开上下文菜单
-3. 选择 **Kiwi-linter** → 选择相应功能
+3. 选择 **Kiwi-linter** → **提取 I18N 文案**
+4. 文案会自动添加到工具窗口的表格中
 
-![右键菜单](docs/images/context-menu.png)
+### 方式三：批量提取
 
-### 方式二：工具窗口
-
-1. 点击 IDE 右侧边栏的 **Kiwi-linter** 图标
-2. 在工具窗口中输入 Key 和中文文案
-3. 点击 **提交文案** 或 **批量录入**
-
-### 方式三：快捷键
-
-直接使用快捷键触发相应功能（见下方快捷键列表）
+1. 打开包含多个 ErrorCode 定义的文件
+2. 右键菜单 → **Kiwi-linter** → **批量提取文件中的 I18N 文案**
+3. 选择要提取的条目
+4. 确认后自动添加到工具窗口
 
 ### 方式四：灯泡菜单（Intention）
 
@@ -114,19 +119,27 @@
 
 ## ⌨️ 快捷键
 
-| 功能             | Windows/Linux                                                      | macOS                                                     |
-| ---------------- | ------------------------------------------------------------------ | --------------------------------------------------------- |
-| 提取 I18N 文案   | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>I</kbd>                    | <kbd>⌘</kbd> + <kbd>⌥</kbd> + <kbd>I</kbd>                |
-| 手动录入（单条） | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> | <kbd>⌘</kbd> + <kbd>⌥</kbd> + <kbd>⇧</kbd> + <kbd>I</kbd> |
-| 批量手动录入     | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> | <kbd>⌘</kbd> + <kbd>⌥</kbd> + <kbd>⇧</kbd> + <kbd>B</kbd> |
+| 功能               | Windows/Linux                                                      | macOS                                                     |
+| ------------------ | ------------------------------------------------------------------ | --------------------------------------------------------- |
+| 提取 I18N 文案     | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>I</kbd>                    | <kbd>⌘</kbd> + <kbd>⌥</kbd> + <kbd>I</kbd>                |
+| 批量提取当前文件   | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> | <kbd>⌘</kbd> + <kbd>⌥</kbd> + <kbd>⇧</kbd> + <kbd>I</kbd> |
 
 ---
 
 ## 📖 功能详解
 
-### 1. 提取 I18N 文案
+### 1. 工具窗口批量录入
 
-从代码中自动识别并提取 I18N 文案。支持的模式：
+工具窗口是管理 I18N 文案的核心界面，支持：
+
+- **快速添加**：在顶部输入区输入 Key 和文案，按回车快速添加
+- **表格编辑**：直接在表格中编辑 Key 和 Value
+- **批量上传**：所有条目在一个 commit 中统一提交
+- **自动去重**：添加时自动检测重复 Key，已存在则更新
+
+### 2. 提取 I18N 文案
+
+从代码中自动识别并提取 I18N 文案到工具窗口。支持的模式：
 
 ```java
 // ErrorCode 枚举模式
@@ -140,47 +153,22 @@ DPN.Module.Key = 中文文案内容
 
 1. 选中包含上述模式的代码
 2. 使用快捷键 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>I</kbd> 或右键菜单
-3. 在弹出的对话框中确认/修改 Key 和 Value
-4. 点击 **确定** 提交
+3. 文案自动添加到工具窗口表格
+4. 在工具窗口点击 **上传** 提交
 
-### 2. 手动录入（单条）
+### 3. 批量提取文件
 
-手动输入单条 I18N 文案，适用于：
-
-- 数据库存储的 Key
-- 无法自动提取的场景
-- 临时添加文案
-
-**使用步骤：**
-
-1. 使用快捷键 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd>
-2. 输入 Key（如：`DPN.DataProcess.CalendarNotFound`）
-3. 输入中文文案
-4. 点击 **确定** 提交
-
-### 3. 批量手动录入
-
-一次性录入多条文案，统一提交，减少 commit 次数。
-
-**使用步骤：**
-
-1. 使用快捷键 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>
-2. 点击 **快速添加** 或手动添加行
-3. 填写多条 Key-Value
-4. 点击 **确定** 统一提交
-
-### 4. 批量提取文件
-
-扫描当前文件中的所有可提取模式，批量选择并提交。
+扫描当前文件中的所有可提取模式，批量选择并添加到工具窗口。
 
 **使用步骤：**
 
 1. 打开包含 ErrorCode 定义的文件
 2. 右键菜单 → **Kiwi-linter** → **批量提取文件中的 I18N 文案**
-3. 在列表中勾选需要提交的条目
-4. 点击 **确定** 统一提交
+3. 在列表中勾选需要提取的条目
+4. 点击 **确定**，条目添加到工具窗口
+5. 在工具窗口统一上传
 
-### 5. 智能合并
+### 4. 智能合并
 
 插件会自动处理重复和更新：
 
@@ -192,7 +180,9 @@ DPN.Module.Key = 中文文案内容
 
 提交完成后会显示详细统计：
 
-> 新增 2 条，更新 1 条，跳过 3 条（已存在且内容相同）
+> ✅ 新增 2 条  
+> 🔄 更新 1 条  
+> ⏭️ 跳过 3 条（已存在且内容相同）
 
 ---
 
@@ -210,9 +200,9 @@ DPN.Module.Key = 中文文案内容
 
 **A:** 检查 Token 权限是否包含 `api` 和 `write_repository`，以及你是否有该分支的写入权限。
 
-### Q: 如何查看提交历史？
+### Q: 工具窗口在哪里？
 
-**A:** 打开右侧 **Kiwi-linter** 工具窗口，底部会显示最近提交的文案记录。
+**A:** 点击 IDE 右侧边栏的 🥝 **Kiwi-linter** 图标，或通过菜单 <kbd>View</kbd> → <kbd>Tool Windows</kbd> → <kbd>Kiwi-linter</kbd> 打开。
 
 ### Q: 支持哪些 IDE？
 
