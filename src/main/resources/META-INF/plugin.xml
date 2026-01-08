@@ -70,19 +70,13 @@
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt I"/>
             </action>
             
-            <!-- 打开文案管理窗口 -->
-            <action id="KiwiI18n.BatchManualEntryAction"
-                    class="com.github.chenweichang1.kiwilinteridea.actions.BatchManualI18nEntryAction"
-                    text="批量手动录入 I18N 文案"
-                    description="批量手动输入多条 I18N 文案，统一提交">
-                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift B"/>
-            </action>
-            
             <!-- 批量提取 -->
             <action id="KiwiI18n.BatchExtractAction"
                     class="com.github.chenweichang1.kiwilinteridea.actions.BatchExtractI18nAction"
                     text="批量提取文件中的 I18N 文案"
-                    description="从当前文件中批量提取所有 I18N 文案"/>
+                    description="从当前文件中批量提取所有 I18N 文案">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift B"/>
+            </action>
             
             <separator/>
         </group>
