@@ -234,8 +234,8 @@ class KiwiToolWindowPanel(private val project: Project) {
         // 停止编辑以确保获取最新数据
         if (table.isEditing) {
             table.cellEditor?.stopCellEditing()
-        }
-        
+                }
+                
         val entries = mutableListOf<I18nEntry>()
         for (row in 0 until tableModel.rowCount) {
             val key = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
@@ -272,12 +272,12 @@ class KiwiToolWindowPanel(private val project: Project) {
     
     private fun submitAllEntries() {
         val entries = getEntries()
-        
-        if (entries.isEmpty()) {
-            Messages.showInfoMessage(project, "没有需要提交的文案", "提示")
-            return
-        }
-        
+            
+            if (entries.isEmpty()) {
+                Messages.showInfoMessage(project, "没有需要提交的文案", "提示")
+                return
+            }
+            
         // 检查 Key 格式
         for (entry in entries) {
             if (!entry.key.matches(Regex("^[\\w.]+$"))) {
@@ -315,15 +315,15 @@ class KiwiToolWindowPanel(private val project: Project) {
                 setLoading(false)
                 
                 when (result) {
-                    is I18nSubmitService.SubmitResult.Success -> {
-                        // 构建详细的统计信息
-                        val statsMsg = buildString {
+                is I18nSubmitService.SubmitResult.Success -> {
+                    // 构建详细的统计信息
+                    val statsMsg = buildString {
                             if (result.added > 0) append("✅ 新增 ${result.added} 条\n")
                             if (result.updated > 0) append("🔄 更新 ${result.updated} 条\n")
                             if (result.skipped > 0) append("⏭️ 跳过 ${result.skipped} 条（已存在且内容相同）")
-                            if (isEmpty()) append("没有需要变更的内容")
-                        }
-                        
+                        if (isEmpty()) append("没有需要变更的内容")
+                    }
+                    
                         val title = if (result.changedCount > 0) "🎉 提交成功" else "提交完成"
                         Messages.showInfoMessage(project, statsMsg.trim(), title)
                         
@@ -331,15 +331,15 @@ class KiwiToolWindowPanel(private val project: Project) {
                         if (result.changedCount > 0) {
                             clearTable()
                         }
-                    }
-                    is I18nSubmitService.SubmitResult.Failure -> {
+                }
+                is I18nSubmitService.SubmitResult.Failure -> {
                         Messages.showErrorDialog(project, result.error, "❌ 提交失败")
-                    }
                 }
             }
         }
     }
-    
+}
+
     /**
      * 设置 loading 状态
      */

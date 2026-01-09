@@ -3,6 +3,7 @@ package com.github.chenweichang1.kiwilinteridea.actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -12,6 +13,7 @@ import com.github.chenweichang1.kiwilinteridea.ui.KiwiToolWindowPanel
 /**
  * 从选中代码提取 I18N 文案的 Action
  * 直接添加到工具窗口的表格中，无需确认对话框
+ * 支持多行代码提取
  */
 class ExtractI18nAction : AnAction() {
     
@@ -26,14 +28,26 @@ class ExtractI18nAction : AnAction() {
             // 尝试从选中文本提取
             I18nExtractor.extractFromSelection(selectedText)
         } else {
-            // 尝试从当前行提取
+            // 尝试从当前行及后续几行提取（支持多行代码）
             val document = editor.document
             val offset = editor.caretModel.offset
             val lineNumber = document.getLineNumber(offset)
             val lineStart = document.getLineStartOffset(lineNumber)
+            
+            // 先尝试单行
             val lineEnd = document.getLineEndOffset(lineNumber)
-            val lineText = document.getText(com.intellij.openapi.util.TextRange(lineStart, lineEnd))
-            I18nExtractor.extractFromLine(lineText)
+            val lineText = document.getText(TextRange(lineStart, lineEnd))
+            var result = I18nExtractor.extractFromLine(lineText)
+            
+            // 如果单行无法匹配，尝试读取多行（当前行 + 后续2行）
+            if (result == null) {
+                val maxLine = minOf(lineNumber + 2, document.lineCount - 1)
+                val multiLineEnd = document.getLineEndOffset(maxLine)
+                val multiLineText = document.getText(TextRange(lineStart, multiLineEnd))
+                result = I18nExtractor.extractFromSelection(multiLineText)
+            }
+            
+            result
         }
         
         if (entry == null) {

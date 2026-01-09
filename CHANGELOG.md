@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-01-09
+
+### Added
+
+- 工具窗口标题栏添加「提交历史」和「持续集成」快捷链接
+
+### Fixed
+
+- 修复多行代码单个提取不生效的问题（支持换行的 ErrorCode 定义）
+
+## [0.0.8] - 2026-01-08
+
+### Changed
+
+- 移除批量手动录入菜单项（与侧边栏功能重复）
+- 批量提取添加快捷键 `Ctrl+Alt+Shift+B`
+
 ## [0.0.7] - 2026-01-08
 
 ### Changed
@@ -46,7 +63,9 @@
 - 手动录入 I18N 文案
 - 一键提交到远程仓库
 
-[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.8...v0.0.9
+[0.0.8]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.4...v0.0.5

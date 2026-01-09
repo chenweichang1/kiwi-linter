@@ -16,6 +16,7 @@ import com.github.chenweichang1.kiwilinteridea.ui.KiwiToolWindowPanel
  * I18N 文案提取的 Intention Action
  * 当光标在可识别的 ErrorCode 模式上时，会在灯泡菜单中显示
  * 直接添加到工具窗口的表格中，无需确认对话框
+ * 支持多行代码提取
  */
 class ExtractI18nIntention : PsiElementBaseIntentionAction(), IntentionAction {
     
@@ -26,22 +27,30 @@ class ExtractI18nIntention : PsiElementBaseIntentionAction(), IntentionAction {
     override fun isAvailable(project: Project, editor: Editor?, element: PsiElement): Boolean {
         if (editor == null) return false
         
-        // 获取当前行文本
+        // 获取当前行及后续几行文本
         val document = editor.document
         val offset = editor.caretModel.offset
         val lineNumber = document.getLineNumber(offset)
         val lineStart = document.getLineStartOffset(lineNumber)
+        
+        // 先检查单行
         val lineEnd = document.getLineEndOffset(lineNumber)
         val lineText = document.getText(TextRange(lineStart, lineEnd))
+        if (I18nExtractor.containsI18nPattern(lineText)) {
+            return true
+        }
         
-        // 检查是否包含可提取的模式
-        return I18nExtractor.containsI18nPattern(lineText)
+        // 检查多行（当前行 + 后续2行）
+        val maxLine = minOf(lineNumber + 2, document.lineCount - 1)
+        val multiLineEnd = document.getLineEndOffset(maxLine)
+        val multiLineText = document.getText(TextRange(lineStart, multiLineEnd))
+        return I18nExtractor.containsI18nPattern(multiLineText)
     }
     
     override fun invoke(project: Project, editor: Editor?, element: PsiElement) {
         if (editor == null) return
         
-        // 获取当前行文本
+        // 获取当前行及后续几行文本
         val document = editor.document
         val offset = editor.caretModel.offset
         val lineNumber = document.getLineNumber(offset)
@@ -49,8 +58,16 @@ class ExtractI18nIntention : PsiElementBaseIntentionAction(), IntentionAction {
         val lineEnd = document.getLineEndOffset(lineNumber)
         val lineText = document.getText(TextRange(lineStart, lineEnd))
         
-        // 提取 I18N 条目
-        val entry = I18nExtractor.extractFromLine(lineText)
+        // 先尝试单行提取
+        var entry = I18nExtractor.extractFromLine(lineText)
+        
+        // 如果单行无法匹配，尝试读取多行（当前行 + 后续2行）
+        if (entry == null) {
+            val maxLine = minOf(lineNumber + 2, document.lineCount - 1)
+            val multiLineEnd = document.getLineEndOffset(maxLine)
+            val multiLineText = document.getText(TextRange(lineStart, multiLineEnd))
+            entry = I18nExtractor.extractFromSelection(multiLineText)
+        }
         
         if (entry == null) {
             NotificationGroupManager.getInstance()
