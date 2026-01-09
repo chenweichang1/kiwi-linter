@@ -4,6 +4,27 @@
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-01-09
+
+### ✨ 新功能
+
+- 重构工具窗口交互：统一使用批量录入表格
+- 提取操作直接添加到表格，无需确认对话框
+- 自动去重：添加条目时检查是否已存在相同 Key
+- 状态栏动态更新：修改配置后自动刷新显示
+- 批量提取新增快捷键 `Ctrl+Alt+Shift+B`
+
+### 🔧 优化
+
+- 移除单条手动录入菜单（与侧边栏重复）
+- 输入框垂直布局，适配窄侧边栏
+- 精简右键菜单选项
+
+### 🐛 修复
+
+- 修复状态栏不更新项目 ID 的问题
+- 修复插件名包含 IDEA 导致验证失败的问题
+
 ## [0.0.7] - 2026-01-08
 
 ### Changed
@@ -46,7 +67,8 @@
 - 手动录入 I18N 文案
 - 一键提交到远程仓库
 
-[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.4...v0.0.5
