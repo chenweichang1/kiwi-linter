@@ -189,6 +189,16 @@ class CodePlatformService(private val project: Project) {
             logger.info("响应: $responseMessage")
             
             if (responseCode in 200..299) {
+                // 收集所有变更的 key（新增 + 更新）
+                val changedKeys = newEntries.keys.filter { key ->
+                    !existingEntries.containsKey(key) || existingEntries[key] != newEntries[key]
+                }.toSet()
+                
+                // 从 en 和 zh_TW 文件中删除变更的 key，以便后续自动翻译阶段重新生成
+                if (changedKeys.isNotEmpty()) {
+                    removeKeysFromOtherLocales(baseApiUrl, projectId, branch, filePath, changedKeys, token, commitMessage)
+                }
+                
                 val resultMsg = buildString {
                     append("提交成功")
                     if (added > 0) append("，新增 $added 条")
@@ -331,6 +341,136 @@ class CodePlatformService(private val project: Project) {
         }
         
         // 用换行符连接所有行，末尾添加换行符（确保下次添加新行时不会修改原有最后一行）
+        return resultLines.joinToString("\n") + "\n"
+    }
+    
+    /**
+     * 从 en 和 zh_TW 文件中删除指定的 key
+     * 用于确保后续自动翻译阶段可以重新生成这些 key 的翻译
+     */
+    private fun removeKeysFromOtherLocales(
+        baseApiUrl: String,
+        projectId: String,
+        branch: String,
+        zhFilePath: String,
+        keysToRemove: Set<String>,
+        token: String,
+        originalCommitMessage: String
+    ) {
+        // 根据 zh 文件路径推导 en 和 zh_TW 文件路径
+        // 例如: dataphin_i18n_data_zh.properties -> dataphin_i18n_data_en.properties, dataphin_i18n_data_zh_TW.properties
+        val otherLocalePaths = listOf(
+            zhFilePath.replace("_zh.properties", "_en.properties"),
+            zhFilePath.replace("_zh.properties", "_zh_TW.properties")
+        )
+        
+        for (localePath in otherLocalePaths) {
+            // 跳过无效路径（如果替换后路径没变，说明不匹配预期格式）
+            if (localePath == zhFilePath) {
+                logger.warn("无法推导出其他语言文件路径，跳过: $zhFilePath")
+                continue
+            }
+            
+            try {
+                val encodedPath = java.net.URLEncoder.encode(localePath, "UTF-8")
+                
+                // 获取现有文件内容
+                val existingContent = getFileContentViaApi(baseApiUrl, projectId, branch, encodedPath, token)
+                if (existingContent.isNullOrEmpty()) {
+                    logger.info("文件不存在或为空，跳过: $localePath")
+                    continue
+                }
+                
+                // 解析现有内容
+                val existingEntries = parsePropertiesContent(existingContent)
+                
+                // 检查是否有需要删除的 key
+                val keysToRemoveInFile = keysToRemove.filter { existingEntries.containsKey(it) }
+                if (keysToRemoveInFile.isEmpty()) {
+                    logger.info("没有需要删除的 key，跳过: $localePath")
+                    continue
+                }
+                
+                logger.info("准备从 $localePath 删除 ${keysToRemoveInFile.size} 个 key: $keysToRemoveInFile")
+                
+                // 重建文件内容（删除指定的 key）
+                val newContent = removeKeysFromContent(existingContent, keysToRemoveInFile.toSet())
+                
+                // 提交文件
+                val apiUrl = "$baseApiUrl/projects/$projectId/repository/files"
+                val connection = URI(apiUrl).toURL().openConnection() as HttpURLConnection
+                connection.requestMethod = "PUT"
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                connection.setRequestProperty("Private-Token", token)
+                
+                val base64Content = Base64.getEncoder().encodeToString(newContent.toByteArray(StandardCharsets.UTF_8))
+                val escapedPath = localePath.replace("\"", "\\\"")
+                val commitMessage = "chore: 删除待重新翻译的 key（关联变更: $originalCommitMessage）"
+                val escapedMessage = commitMessage.replace("\"", "\\\"")
+                val requestBody = """
+                    {
+                        "file_path": "$escapedPath",
+                        "branch_name": "$branch",
+                        "content": "$base64Content",
+                        "encoding": "base64",
+                        "commit_message": "$escapedMessage"
+                    }
+                """.trimIndent()
+                
+                connection.outputStream.use { os ->
+                    OutputStreamWriter(os, StandardCharsets.UTF_8).use { writer ->
+                        writer.write(requestBody)
+                        writer.flush()
+                    }
+                }
+                
+                val responseCode = connection.responseCode
+                if (responseCode in 200..299) {
+                    logger.info("成功从 $localePath 删除 ${keysToRemoveInFile.size} 个 key")
+                } else {
+                    val errorMessage = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
+                    logger.warn("从 $localePath 删除 key 失败 ($responseCode): $errorMessage")
+                }
+            } catch (e: Exception) {
+                logger.warn("处理 $localePath 时发生错误", e)
+            }
+        }
+    }
+    
+    /**
+     * 从 properties 内容中删除指定的 key
+     */
+    private fun removeKeysFromContent(content: String, keysToRemove: Set<String>): String {
+        val resultLines = mutableListOf<String>()
+        
+        content.lines().forEach { line ->
+            val trimmedLine = line.trim()
+            
+            // 跳过空行（不保留空行）
+            if (trimmedLine.isEmpty()) {
+                return@forEach
+            }
+            
+            // 保留注释
+            if (trimmedLine.startsWith("#") || trimmedLine.startsWith("!")) {
+                resultLines.add(line)
+                return@forEach
+            }
+            
+            // 解析 key
+            val separatorIndex = line.indexOfFirst { it == '=' || it == ':' }
+            if (separatorIndex > 0) {
+                val key = line.substring(0, separatorIndex).trim()
+                // 如果 key 在删除列表中，则跳过这一行
+                if (keysToRemove.contains(key)) {
+                    return@forEach
+                }
+            }
+            
+            resultLines.add(line)
+        }
+        
         return resultLines.joinToString("\n") + "\n"
     }
     
