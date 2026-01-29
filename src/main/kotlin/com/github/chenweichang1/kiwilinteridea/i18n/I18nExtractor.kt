@@ -11,23 +11,26 @@ import java.util.regex.Pattern
 object I18nExtractor {
     
     /**
-     * 匹配 ErrorCode 枚举定义模式（支持多行）
+     * 匹配三参数模式（支持多行）
+     * 只提取前两项（key 和 value），第三项可以是任意内容
+     * key 必须以 "DPN." 开头才会被识别
+     * 
      * 示例1: CALENDAR_NOT_FOUND("DPN.DataProcess.CalendarNotFound","根据id或者编码:{0} 找不到公共日历",ErrorLevel.LOGIC)
      * 示例2: NO_AGENT_USE_PERMISSION("DPN.Mdc.AiAgent.NoAgentUsePermission", "你没有该智能体权限", USER_ERROR)
-     * 示例3: CONVERSATION_LIST_LIMIT_PARAM_VALID("DPN.Mdc.AiAgent.ConversationListLimitParamValid",
-     *            "会话列表查询参数错误，limit 要大于0", USER_ERROR)
+     * 示例3: SOME_ERROR("DPN.Some.Error", "错误描述", "字符串参数")
      */
     private val ERROR_CODE_PATTERN = Pattern.compile(
-        """(\w+)\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(?:\w+\.)?(\w+)\s*\)""",
+        """(\w+)\s*\(\s*"(DPN\.[^"]+)"\s*,\s*"([^"]+)"\s*,[^)]+\)""",
         Pattern.DOTALL
     )
     
     /**
      * 匹配简单的双参数模式
-     * 示例: SOME_KEY("key.name", "中文描述")
+     * key 必须以 "DPN." 开头才会被识别
+     * 示例: SOME_KEY("DPN.Key.Name", "中文描述")
      */
     private val SIMPLE_PATTERN = Pattern.compile(
-        """(\w+)\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)""",
+        """(\w+)\s*\(\s*"(DPN\.[^"]+)"\s*,\s*"([^"]+)"\s*\)""",
         Pattern.DOTALL
     )
     

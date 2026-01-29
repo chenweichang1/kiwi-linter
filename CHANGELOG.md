@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-27
+
+### Added
+
+- **Hover 预览功能**：鼠标悬停在 DPN key 上显示中英文文案信息
+- **文案缓存服务**：自动从远程仓库加载并缓存中英文 properties 文件
+- **实时缓存更新**：提交文案后自动更新本地缓存
+
+### Changed
+
+- 优化 I18N 模式识别：支持第三项为字符串或枚举的 ErrorCode 定义
+- 精确过滤：只识别 `DPN.` 开头的 key，避免误识别
+- 快捷键提示同时显示 Mac (`⌘⌥I`) 和 Windows (`Ctrl+Alt+I`)
+
+### Fixed
+
+- 修复第三参数为字符串时无法识别的问题
+
 ## [0.0.9] - 2026-01-09
 
 ### Added
@@ -63,7 +81,8 @@
 - 手动录入 I18N 文案
 - 一键提交到远程仓库
 
-[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.9...v1.0.0
 [0.0.9]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.6...v0.0.7

@@ -13,6 +13,7 @@
             <li><b>Manual Entry</b>: Manually input key-value pairs for database-stored keys</li>
             <li><b>Batch Extract</b>: Extract all I18N entries from current file</li>
             <li><b>One-click Push</b>: Directly commit to remote repository</li>
+            <li><b>Hover Preview</b>: Hover on I18N key to see Chinese/English translations</li>
         </ul>
         
         <h3>Usage</h3>
@@ -20,6 +21,7 @@
             <li>Right-click menu -> Kiwi-linter -> Extract / Manual Entry</li>
             <li>Alt+Enter intention menu -> Extract I18N to repository</li>
             <li>Tools menu -> Kiwi-linter</li>
+            <li>Hover on "DPN.xxx" key to preview translations (Ctrl+Q for full doc)</li>
         </ul>
     ]]></description>
 
@@ -52,7 +54,7 @@
         <!-- 通知组 -->
         <notificationGroup id="Kiwi-linter" displayType="BALLOON"/>
         
-        <!-- 代码标注器 - 高亮显示可提取的 I18N 模式 -->
+        <!-- 代码标注器 - 高亮显示 DPN key 并在 hover 时显示中英文信息 -->
         <annotator 
             language="" 
             implementationClass="com.github.chenweichang1.kiwilinteridea.annotator.I18nPatternAnnotator"/>

@@ -67,6 +67,11 @@ class I18nSubmitService(private val project: Project) {
             
             result.fold(
                 onSuccess = { commitResult ->
+                    // 提交成功后更新本地缓存
+                    if (commitResult.changedCount > 0) {
+                        I18nCacheService.getInstance(project).updateLocalCache(entry.key, entry.value)
+                    }
+                    
                     val notifyMsg = when {
                         commitResult.skipped > 0 && commitResult.changedCount == 0 -> 
                             "Key: ${entry.key} 已存在且内容相同，已跳过"
@@ -125,6 +130,12 @@ class I18nSubmitService(private val project: Project) {
             
             result.fold(
                 onSuccess = { commitResult ->
+                    // 提交成功后批量更新本地缓存
+                    if (commitResult.changedCount > 0) {
+                        val cacheEntries = entries.associate { it.key to it.value }
+                        I18nCacheService.getInstance(project).updateLocalCacheBatch(cacheEntries)
+                    }
+                    
                     // 构建通知消息，显示实际变更情况
                     val notifyMsg = buildString {
                         if (commitResult.added > 0) append("新增 ${commitResult.added} 条")
