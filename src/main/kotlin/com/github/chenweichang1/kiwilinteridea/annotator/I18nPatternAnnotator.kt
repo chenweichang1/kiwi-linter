@@ -15,8 +15,9 @@ import com.github.chenweichang1.kiwilinteridea.services.I18nCacheService
  */
 class I18nPatternAnnotator : Annotator {
     
-    // 匹配 DPN 开头的 key（只匹配 key 字符串部分）
-    private val keyPattern = Regex(""""(DPN\.[^"]+)"""")
+    // 匹配包含 D、P、N 三个字母组合开头的 key（只匹配 key 字符串部分）
+    // 支持 DPN、DNP、PND、PDN、NPD、NDP 等所有组合
+    private val keyPattern = Regex(""""([DPN]{3}\.[^"]+)"""")
     
     override fun annotate(element: PsiElement, holder: AnnotationHolder) {
         // 只处理文件级别，避免重复处理

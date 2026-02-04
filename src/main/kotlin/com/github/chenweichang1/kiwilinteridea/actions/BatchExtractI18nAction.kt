@@ -12,6 +12,10 @@ import com.github.chenweichang1.kiwilinteridea.ui.KiwiToolWindowPanel
 /**
  * 从当前文件批量提取 I18N 文案的 Action
  * 直接添加到工具窗口的表格中，无需确认对话框
+ * 
+ * 支持的格式：
+ * 1. ErrorCode 模式：ERROR_CODE("DPN.xxx", "中文", ...)
+ * 2. JSON 格式：{"DPN.xxx": "中文", ...}
  */
 class BatchExtractI18nAction : AnAction() {
     
@@ -21,7 +25,13 @@ class BatchExtractI18nAction : AnAction() {
         
         // 从文件内容提取所有 I18N 条目
         val fileContent = editor.document.text
-        val entries = I18nExtractor.extractFromFile(fileContent)
+        
+        // 检测是否为 JSON 格式，如果是则使用 JSON 提取器
+        val entries = if (I18nExtractor.isJsonContent(fileContent)) {
+            I18nExtractor.extractFromJson(fileContent)
+        } else {
+            I18nExtractor.extractFromFile(fileContent)
+        }
         
         if (entries.isEmpty()) {
             NotificationGroupManager.getInstance()

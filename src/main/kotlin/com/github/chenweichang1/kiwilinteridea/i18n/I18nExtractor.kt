@@ -13,24 +13,27 @@ object I18nExtractor {
     /**
      * 匹配三参数模式（支持多行）
      * 只提取前两项（key 和 value），第三项可以是任意内容
-     * key 必须以 "DPN." 开头才会被识别
+     * key 必须包含 D、P、N 三个字母组合开头才会被识别
+     * 支持 DPN、DNP、PND、PDN、NPD、NDP 等所有组合
      * 
      * 示例1: CALENDAR_NOT_FOUND("DPN.DataProcess.CalendarNotFound","根据id或者编码:{0} 找不到公共日历",ErrorLevel.LOGIC)
      * 示例2: NO_AGENT_USE_PERMISSION("DPN.Mdc.AiAgent.NoAgentUsePermission", "你没有该智能体权限", USER_ERROR)
      * 示例3: SOME_ERROR("DPN.Some.Error", "错误描述", "字符串参数")
+     * 示例4: OLD_ERROR("DNP.Some.Error", "老代码错误", ErrorLevel.LOGIC)
      */
     private val ERROR_CODE_PATTERN = Pattern.compile(
-        """(\w+)\s*\(\s*"(DPN\.[^"]+)"\s*,\s*"([^"]+)"\s*,[^)]+\)""",
+        """(\w+)\s*\(\s*"([DPN]{3}\.[^"]+)"\s*,\s*"([^"]+)"\s*,[^)]+\)""",
         Pattern.DOTALL
     )
     
     /**
      * 匹配简单的双参数模式
-     * key 必须以 "DPN." 开头才会被识别
+     * key 必须包含 D、P、N 三个字母组合开头才会被识别
+     * 支持 DPN、DNP、PND、PDN、NPD、NDP 等所有组合
      * 示例: SOME_KEY("DPN.Key.Name", "中文描述")
      */
     private val SIMPLE_PATTERN = Pattern.compile(
-        """(\w+)\s*\(\s*"(DPN\.[^"]+)"\s*,\s*"([^"]+)"\s*\)""",
+        """(\w+)\s*\(\s*"([DPN]{3}\.[^"]+)"\s*,\s*"([^"]+)"\s*\)""",
         Pattern.DOTALL
     )
     
@@ -110,6 +113,42 @@ object I18nExtractor {
         val lineText = document.getText(com.intellij.openapi.util.TextRange(lineStart, lineEnd))
         
         return extractFromLine(lineText)
+    }
+    
+    /**
+     * 从 JSON 格式提取 I18N 条目
+     * 支持格式: {"key": "value", ...}
+     * key 必须包含 D、P、N 三个字母组合开头才会被识别
+     */
+    fun extractFromJson(jsonContent: String): List<I18nEntry> {
+        val entries = mutableListOf<I18nEntry>()
+        
+        // 匹配 JSON 中的 key-value 对
+        // 支持 "key":"value" 和 "key": "value" 两种格式
+        val jsonPattern = Pattern.compile(""""([DPN]{3}\.[^"]+)"\s*:\s*"([^"]+)"""")
+        val matcher = jsonPattern.matcher(jsonContent)
+        
+        while (matcher.find()) {
+            val key = matcher.group(1)
+            val value = matcher.group(2)
+            entries.add(
+                I18nEntry(
+                    key = key,
+                    value = value,
+                    sourceLocation = "json"
+                )
+            )
+        }
+        
+        return entries
+    }
+    
+    /**
+     * 检测文本是否为 JSON 格式
+     */
+    fun isJsonContent(content: String): Boolean {
+        val trimmed = content.trim()
+        return trimmed.startsWith("{") && trimmed.endsWith("}")
     }
 }
 

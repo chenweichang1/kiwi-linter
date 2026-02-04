@@ -34,6 +34,7 @@ class KiwiToolWindowFactory : ToolWindowFactory {
         
         // 添加标题栏链接按钮
         val actions = listOf(
+            createLinkAction("📂 导入文件", "https://giti.lydaas.com/i18n/import"),
             createLinkAction("📋 提交历史", "https://code.alibaba-inc.com/dataphin/dataphin-i18n-data/commits/release"),
             createLinkAction("🚀 持续集成", "https://code.alibaba-inc.com/dataphin/dataphin-i18n-data/ci?createType=yaml&tab=task")
         )

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-02-03
+
+### Added
+
+- **JSON 格式支持**：批量提取功能现在支持从 JSON 文件中提取 I18N 条目
+- **导入文件按钮**：工具窗口标题栏新增「导入文件」快捷链接，可直接跳转到 GitLab 导入页面
+
+### Changed
+
+- **DPN 匹配优化**：支持识别 DPN、DNP、PND 等所有字母组合（兼容老代码中的拼写错误）
+- 改进 `.gitignore`：添加 `bin` 目录，避免误提交编译文件
+
 ## [1.0.0] - 2026-01-27
 
 ### Added
@@ -81,7 +93,8 @@
 - 手动录入 I18N 文案
 - 一键提交到远程仓库
 
-[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.9...v1.0.0
 [0.0.9]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/chenweichang1/kiwi-linter-idea/compare/v0.0.7...v0.0.8

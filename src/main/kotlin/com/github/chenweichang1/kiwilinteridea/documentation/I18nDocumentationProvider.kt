@@ -14,8 +14,9 @@ import java.util.regex.Pattern
  */
 class I18nDocumentationProvider : AbstractDocumentationProvider() {
     
-    // 匹配 DPN 开头的 key
-    private val keyPattern = Pattern.compile(""""(DPN\.[^"]+)"""")
+    // 匹配包含 D、P、N 三个字母组合开头的 key
+    // 支持 DPN、DNP、PND、PDN、NPD、NDP 等所有组合
+    private val keyPattern = Pattern.compile(""""([DPN]{3}\.[^"]+)"""")
     
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
         if (originalElement == null) return null
