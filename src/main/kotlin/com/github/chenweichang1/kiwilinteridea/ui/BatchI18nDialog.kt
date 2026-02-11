@@ -28,7 +28,12 @@ class BatchI18nDialog(
         
         // 填充列表
         entries.forEach { entry ->
-            checkBoxList.addItem(entry, "${entry.key} = ${entry.value}", true)
+            val label = if (entry.hasEnValue()) {
+                "${entry.key} = ${entry.value} | EN: ${entry.enValue}"
+            } else {
+                "${entry.key} = ${entry.value}"
+            }
+            checkBoxList.addItem(entry, label, true)
         }
     }
     

@@ -31,6 +31,11 @@ class I18nEntryDialog(
         wrapStyleWord = true
     }
     
+    private val enValueArea = JTextArea(3, 40).apply {
+        lineWrap = true
+        wrapStyleWord = true
+    }
+    
     private val sourceLabel = JBLabel()
     
     init {
@@ -41,6 +46,7 @@ class I18nEntryDialog(
         initialEntry?.let {
             keyField.text = it.key
             valueArea.text = it.value
+            enValueArea.text = it.enValue
             it.sourceLocation?.let { loc ->
                 sourceLabel.text = "来源: $loc"
             }
@@ -52,9 +58,14 @@ class I18nEntryDialog(
             preferredSize = JBUI.size(400, 80)
         }
         
+        val enValueScrollPane = JScrollPane(enValueArea).apply {
+            preferredSize = JBUI.size(400, 80)
+        }
+        
         val panel = FormBuilder.createFormBuilder()
             .addLabeledComponent(JBLabel("Key:"), keyField, 1, false)
             .addLabeledComponent(JBLabel("中文文案:"), valueScrollPane, 1, false)
+            .addLabeledComponent(JBLabel("英文文案:"), enValueScrollPane, 1, false)
             .addComponentToRightColumn(sourceLabel, 1)
             .addComponentFillVertically(JPanel(), 0)
             .panel
@@ -86,6 +97,7 @@ class I18nEntryDialog(
         return I18nEntry(
             key = keyField.text.trim(),
             value = valueArea.text.trim(),
+            enValue = enValueArea.text.trim(),
             sourceLocation = initialEntry?.sourceLocation
         )
     }

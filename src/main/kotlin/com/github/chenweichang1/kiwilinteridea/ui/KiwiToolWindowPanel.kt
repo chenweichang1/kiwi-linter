@@ -23,7 +23,7 @@ import javax.swing.table.DefaultTableModel
  */
 class KiwiToolWindowPanel(private val project: Project) {
     
-    private val tableModel = object : DefaultTableModel(arrayOf("Key", "中文文案"), 0) {
+    private val tableModel = object : DefaultTableModel(arrayOf("Key", "中文文案", "英文文案"), 0) {
         override fun isCellEditable(row: Int, column: Int): Boolean = true
     }
     
@@ -31,7 +31,8 @@ class KiwiToolWindowPanel(private val project: Project) {
         setShowGrid(true)
         rowHeight = 28
         columnModel.getColumn(0).preferredWidth = 200
-        columnModel.getColumn(1).preferredWidth = 300
+        columnModel.getColumn(1).preferredWidth = 200
+        columnModel.getColumn(2).preferredWidth = 200
     }
     
     private val submitButton = JButton("📤 上传").apply {
@@ -51,6 +52,9 @@ class KiwiToolWindowPanel(private val project: Project) {
     private val quickValueField = JBTextField().apply {
         emptyText.text = "输入中文文案"
     }
+    private val quickEnValueField = JBTextField().apply {
+        emptyText.text = "输入英文文案（可选）"
+    }
     
     // 保存面板引用，用于 loading 时禁用
     private lateinit var mainPanel: JPanel
@@ -69,7 +73,7 @@ class KiwiToolWindowPanel(private val project: Project) {
         // 带工具栏的表格
         val decorator = ToolbarDecorator.createDecorator(table)
             .setAddAction { 
-                tableModel.addRow(arrayOf("", ""))
+                tableModel.addRow(arrayOf("", "", ""))
                 table.editCellAt(tableModel.rowCount - 1, 0)
                 updateCount()
             }
@@ -128,9 +132,10 @@ class KiwiToolWindowPanel(private val project: Project) {
         val addButton = JButton("➕ 添加").apply {
             addActionListener {
                 if (quickKeyField.text.isNotBlank() && quickValueField.text.isNotBlank()) {
-                    addEntry(I18nEntry(quickKeyField.text.trim(), quickValueField.text.trim()))
+                    addEntry(I18nEntry(quickKeyField.text.trim(), quickValueField.text.trim(), quickEnValueField.text.trim()))
                     quickKeyField.text = ""
                     quickValueField.text = ""
+                    quickEnValueField.text = ""
                     quickKeyField.requestFocus()
                 }
             }
@@ -138,6 +143,9 @@ class KiwiToolWindowPanel(private val project: Project) {
         
         // 支持回车快速添加
         quickValueField.addActionListener {
+            addButton.doClick()
+        }
+        quickEnValueField.addActionListener {
             addButton.doClick()
         }
         
@@ -154,6 +162,13 @@ class KiwiToolWindowPanel(private val project: Project) {
             add(quickValueField, BorderLayout.CENTER)
         }
         
+        // 英文输入行
+        val enValueRow = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.emptyTop(5)
+            add(JBLabel("英文:    "), BorderLayout.WEST)
+            add(quickEnValueField, BorderLayout.CENTER)
+        }
+        
         // 按钮行
         val buttonRow = JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
             border = JBUI.Borders.emptyTop(5)
@@ -162,6 +177,7 @@ class KiwiToolWindowPanel(private val project: Project) {
         
         panel.add(keyRow)
         panel.add(valueRow)
+        panel.add(enValueRow)
         panel.add(buttonRow)
         
         return panel
@@ -195,12 +211,15 @@ class KiwiToolWindowPanel(private val project: Project) {
             if (existingKey == entry.key) {
                 // 已存在，更新值
                 tableModel.setValueAt(entry.value, row, 1)
+                if (entry.enValue.isNotBlank()) {
+                    tableModel.setValueAt(entry.enValue, row, 2)
+                }
                 updateCount()
                 return false // 返回 false 表示是更新而非新增
             }
         }
         // 不存在，添加新行
-        tableModel.addRow(arrayOf(entry.key, entry.value))
+        tableModel.addRow(arrayOf(entry.key, entry.value, entry.enValue))
         updateCount()
         return true // 返回 true 表示是新增
     }
@@ -219,7 +238,7 @@ class KiwiToolWindowPanel(private val project: Project) {
         
         uniqueEntries.forEach { entry ->
             if (!existingKeys.contains(entry.key)) {
-                tableModel.addRow(arrayOf(entry.key, entry.value))
+                tableModel.addRow(arrayOf(entry.key, entry.value, entry.enValue))
                 addedCount++
             }
         }
@@ -240,9 +259,10 @@ class KiwiToolWindowPanel(private val project: Project) {
         for (row in 0 until tableModel.rowCount) {
             val key = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
             val value = (tableModel.getValueAt(row, 1) as? String)?.trim() ?: ""
+            val enValue = (tableModel.getValueAt(row, 2) as? String)?.trim() ?: ""
             
             if (key.isNotBlank() && value.isNotBlank()) {
-                entries.add(I18nEntry(key, value))
+                entries.add(I18nEntry(key, value, enValue))
             }
         }
         return entries

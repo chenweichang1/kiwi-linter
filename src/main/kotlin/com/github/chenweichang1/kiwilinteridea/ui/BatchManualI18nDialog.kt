@@ -23,15 +23,16 @@ class BatchManualI18nDialog(
     private val project: Project
 ) : DialogWrapper(project, true) {
     
-    private val tableModel = object : DefaultTableModel(arrayOf("Key", "中文文案"), 0) {
+    private val tableModel = object : DefaultTableModel(arrayOf("Key", "中文文案", "英文文案"), 0) {
         override fun isCellEditable(row: Int, column: Int): Boolean = true
     }
     
     private val table = JBTable(tableModel).apply {
         setShowGrid(true)
         rowHeight = 28
-        columnModel.getColumn(0).preferredWidth = 250
-        columnModel.getColumn(1).preferredWidth = 350
+        columnModel.getColumn(0).preferredWidth = 200
+        columnModel.getColumn(1).preferredWidth = 250
+        columnModel.getColumn(2).preferredWidth = 250
     }
     
     init {
@@ -50,7 +51,7 @@ class BatchManualI18nDialog(
         // 带工具栏的表格（添加/删除行）
         val decorator = ToolbarDecorator.createDecorator(table)
             .setAddAction { 
-                tableModel.addRow(arrayOf("", ""))
+                tableModel.addRow(arrayOf("", "", ""))
                 table.editCellAt(tableModel.rowCount - 1, 0)
             }
             .setRemoveAction {
@@ -60,7 +61,7 @@ class BatchManualI18nDialog(
             .disableUpDownActions()
         
         val tablePanel = decorator.createPanel()
-        tablePanel.preferredSize = Dimension(650, 350)
+        tablePanel.preferredSize = Dimension(800, 350)
         
         // 快速添加区域
         val quickAddPanel = createQuickAddPanel()
@@ -77,18 +78,22 @@ class BatchManualI18nDialog(
         val panel = JPanel(BorderLayout())
         panel.border = JBUI.Borders.emptyTop(10)
         
-        val keyField = JBTextField(20).apply {
+        val keyField = JBTextField(15).apply {
             emptyText.text = "Key"
         }
-        val valueField = JBTextField(30).apply {
+        val valueField = JBTextField(15).apply {
             emptyText.text = "中文文案"
+        }
+        val enValueField = JBTextField(15).apply {
+            emptyText.text = "英文文案（可选）"
         }
         val addButton = JButton("快速添加").apply {
             addActionListener {
                 if (keyField.text.isNotBlank() && valueField.text.isNotBlank()) {
-                    tableModel.addRow(arrayOf(keyField.text.trim(), valueField.text.trim()))
+                    tableModel.addRow(arrayOf(keyField.text.trim(), valueField.text.trim(), enValueField.text.trim()))
                     keyField.text = ""
                     valueField.text = ""
+                    enValueField.text = ""
                     keyField.requestFocus()
                 }
             }
@@ -97,10 +102,13 @@ class BatchManualI18nDialog(
         val inputPanel = JPanel().apply {
             add(JBLabel("Key:"))
             add(keyField)
-            add(Box.createHorizontalStrut(10))
+            add(Box.createHorizontalStrut(5))
             add(JBLabel("文案:"))
             add(valueField)
-            add(Box.createHorizontalStrut(10))
+            add(Box.createHorizontalStrut(5))
+            add(JBLabel("英文:"))
+            add(enValueField)
+            add(Box.createHorizontalStrut(5))
             add(addButton)
         }
         
@@ -144,9 +152,10 @@ class BatchManualI18nDialog(
         for (row in 0 until tableModel.rowCount) {
             val key = (tableModel.getValueAt(row, 0) as? String)?.trim() ?: ""
             val value = (tableModel.getValueAt(row, 1) as? String)?.trim() ?: ""
+            val enValue = (tableModel.getValueAt(row, 2) as? String)?.trim() ?: ""
             
             if (key.isNotBlank() && value.isNotBlank()) {
-                entries.add(I18nEntry(key, value))
+                entries.add(I18nEntry(key, value, enValue))
             }
         }
         return entries

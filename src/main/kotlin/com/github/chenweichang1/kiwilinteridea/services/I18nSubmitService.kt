@@ -72,6 +72,15 @@ class I18nSubmitService(private val project: Project) {
                         I18nCacheService.getInstance(project).updateLocalCache(entry.key, entry.value)
                     }
                     
+                    // 提交英文文案到 en 文件（如果有的话）
+                    if (entry.hasEnValue()) {
+                        submitEnglishEntries(
+                            listOf(entry),
+                            settings,
+                            codePlatformService
+                        )
+                    }
+                    
                     val notifyMsg = when {
                         commitResult.skipped > 0 && commitResult.changedCount == 0 -> 
                             "Key: ${entry.key} 已存在且内容相同，已跳过"
@@ -113,10 +122,14 @@ class I18nSubmitService(private val project: Project) {
         }
         
         return try {
+            // 1. 提交中文文案到 zh 文件
             val content = entries.joinToString("\n") { it.toPropertiesLine() }
             val keys = entries.take(3).map { it.key }.joinToString(", ") + 
                 if (entries.size > 3) " 等${entries.size}条" else ""
             val commitMessage = "feat: 批量添加 I18N 文案 - $keys"
+            
+            // 收集有英文翻译的条目
+            val enEntries = entries.filter { it.hasEnValue() }
             
             val codePlatformService = CodePlatformService.getInstance(project)
             val result = codePlatformService.commitFile(
@@ -136,16 +149,35 @@ class I18nSubmitService(private val project: Project) {
                         I18nCacheService.getInstance(project).updateLocalCacheBatch(cacheEntries)
                     }
                     
+                    // 2. 提交英文文案到 en 文件（如果有的话）
+                    var enCommitResult: CodePlatformService.CommitResult? = null
+                    if (enEntries.isNotEmpty()) {
+                        enCommitResult = submitEnglishEntries(enEntries, settings, codePlatformService)
+                    }
+                    
                     // 构建通知消息，显示实际变更情况
                     val notifyMsg = buildString {
+                        append("中文文案: ")
                         if (commitResult.added > 0) append("新增 ${commitResult.added} 条")
                         if (commitResult.updated > 0) {
-                            if (isNotEmpty()) append("，")
+                            if (!endsWith(": ")) append("，")
                             append("更新 ${commitResult.updated} 条")
                         }
                         if (commitResult.skipped > 0) {
-                            if (isNotEmpty()) append("，")
+                            if (!endsWith(": ")) append("，")
                             append("跳过 ${commitResult.skipped} 条（已存在）")
+                        }
+                        if (enCommitResult != null) {
+                            append("\n英文文案: ")
+                            if (enCommitResult.added > 0) append("新增 ${enCommitResult.added} 条")
+                            if (enCommitResult.updated > 0) {
+                                if (!endsWith(": ")) append("，")
+                                append("更新 ${enCommitResult.updated} 条")
+                            }
+                            if (enCommitResult.skipped > 0) {
+                                if (!endsWith(": ")) append("，")
+                                append("跳过 ${enCommitResult.skipped} 条（已存在）")
+                            }
                         }
                         if (isEmpty()) append("没有需要变更的内容")
                     }
@@ -166,6 +198,50 @@ class I18nSubmitService(private val project: Project) {
             logger.error("批量提交失败", e)
             showNotification("批量录入失败", e.message ?: "未知错误", NotificationType.ERROR)
             SubmitResult.Failure("批量提交失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 提交英文文案到 en properties 文件
+     */
+    private fun submitEnglishEntries(
+        enEntries: List<I18nEntry>,
+        settings: KiwiSettings,
+        codePlatformService: CodePlatformService
+    ): CodePlatformService.CommitResult? {
+        return try {
+            val enFilePath = settings.state.zhPropertiesPath.replace("_zh.properties", "_en.properties")
+            if (enFilePath == settings.state.zhPropertiesPath) {
+                logger.warn("无法推导英文 properties 文件路径")
+                return null
+            }
+            
+            val enContent = enEntries.joinToString("\n") { it.toEnPropertiesLine() }
+            val enCommitMessage = "feat: 批量添加 I18N 英文文案 - ${enEntries.take(3).map { it.key }.joinToString(", ")}" +
+                if (enEntries.size > 3) " 等${enEntries.size}条" else ""
+            
+            val enResult = codePlatformService.commitFile(
+                repoPath = settings.state.projectId,
+                branch = settings.state.targetBranch,
+                filePath = enFilePath,
+                content = enContent,
+                commitMessage = enCommitMessage,
+                append = true
+            )
+            
+            enResult.fold(
+                onSuccess = { commitResult ->
+                    logger.info("英文文案提交成功: 新增 ${commitResult.added}，更新 ${commitResult.updated}，跳过 ${commitResult.skipped}")
+                    commitResult
+                },
+                onFailure = { 
+                    logger.warn("英文文案提交失败: ${it.message}")
+                    null
+                }
+            )
+        } catch (e: Exception) {
+            logger.warn("英文文案提交失败", e)
+            null
         }
     }
     
