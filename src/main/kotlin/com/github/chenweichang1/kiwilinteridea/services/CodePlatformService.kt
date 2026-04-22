@@ -34,6 +34,20 @@ class CodePlatformService(private val project: Project) {
     }
     
     /**
+     * 准备好的文件变更（尚未提交）
+     */
+    data class PreparedFileChange(
+        val filePath: String,
+        val finalContent: String,
+        val isCreate: Boolean,
+        val added: Int,
+        val updated: Int,
+        val skipped: Int
+    ) {
+        val changedCount: Int get() = added + updated
+    }
+    
+    /**
      * 提交文件更改到仓库
      * @return CommitResult 包含新增、更新、跳过的数量统计
      */
@@ -345,6 +359,179 @@ class CodePlatformService(private val project: Project) {
     }
     
     /**
+     * 准备文件变更（不执行提交），用于批量提交
+     * 解析现有内容，合并去重，返回准备好的文件变更
+     */
+    fun prepareFileChange(
+        branch: String,
+        filePath: String,
+        content: String
+    ): Result<PreparedFileChange> {
+        return try {
+            val settings = KiwiSettings.getInstance(project)
+            val token = settings.state.privateToken
+            if (token.isBlank()) return Result.failure(Exception("请在设置中配置 Private Token"))
+            
+            val projectId = settings.state.projectId
+            if (projectId.isBlank()) return Result.failure(Exception("请在设置中配置项目 ID"))
+            
+            val baseApiUrl = "https://code.alibaba-inc.com/api/v3"
+            val encodedPath = java.net.URLEncoder.encode(filePath, "UTF-8")
+            
+            val existingContent = getFileContentViaApi(baseApiUrl, projectId, branch, encodedPath, token) ?: ""
+            val isCreate = existingContent.isEmpty()
+            
+            val existingEntries = parsePropertiesContent(existingContent)
+            val newEntries = parsePropertiesContent(content)
+            
+            var added = 0
+            var updated = 0
+            var skipped = 0
+            
+            for ((key, value) in newEntries) {
+                when {
+                    !existingEntries.containsKey(key) -> { added++; logger.info("新增: $key") }
+                    existingEntries[key] != value -> { updated++; logger.info("更新: $key") }
+                    else -> { skipped++; logger.info("跳过: $key") }
+                }
+            }
+            
+            if (added == 0 && updated == 0) {
+                return Result.success(PreparedFileChange(filePath, "", isCreate, 0, 0, skipped))
+            }
+            
+            val submittedKeys = newEntries.keys
+            val finalContent = rebuildPropertiesContent(existingContent, submittedKeys, newEntries)
+            
+            Result.success(PreparedFileChange(filePath, finalContent, isCreate, added, updated, skipped))
+        } catch (e: Exception) {
+            logger.error("准备文件变更失败: $filePath", e)
+            Result.failure(Exception("准备文件变更失败: ${e.message}"))
+        }
+    }
+    
+    /**
+     * 准备从其他语言文件中删除指定 key 的变更
+     */
+    fun prepareRemoveKeysFromOtherLocales(
+        branch: String,
+        zhFilePath: String,
+        keysToRemove: Set<String>
+    ): List<PreparedFileChange> {
+        val changes = mutableListOf<PreparedFileChange>()
+        val settings = KiwiSettings.getInstance(project)
+        val token = settings.state.privateToken
+        val projectId = settings.state.projectId
+        val baseApiUrl = "https://code.alibaba-inc.com/api/v3"
+        
+        val otherLocalePaths = listOf(
+            zhFilePath.replace("_zh.properties", "_en.properties"),
+            zhFilePath.replace("_zh.properties", "_zh_TW.properties")
+        )
+        
+        for (localePath in otherLocalePaths) {
+            if (localePath == zhFilePath) continue
+            try {
+                val encodedPath = java.net.URLEncoder.encode(localePath, "UTF-8")
+                val existingContent = getFileContentViaApi(baseApiUrl, projectId, branch, encodedPath, token)
+                if (existingContent.isNullOrEmpty()) continue
+                
+                val existingEntries = parsePropertiesContent(existingContent)
+                val keysToRemoveInFile = keysToRemove.filter { existingEntries.containsKey(it) }
+                if (keysToRemoveInFile.isEmpty()) continue
+                
+                logger.info("准备从 $localePath 删除 ${keysToRemoveInFile.size} 个 key")
+                val newContent = removeKeysFromContent(existingContent, keysToRemoveInFile.toSet())
+                changes.add(PreparedFileChange(localePath, newContent, false, 0, 0, 0))
+            } catch (e: Exception) {
+                logger.warn("处理 $localePath 时发生错误", e)
+            }
+        }
+        return changes
+    }
+    
+    /**
+     * 批量提交多个文件变更为一个 commit
+     * 使用 /repository/commits API
+     */
+    fun batchCommitFiles(
+        branch: String,
+        commitMessage: String,
+        fileChanges: List<PreparedFileChange>
+    ): Result<String> {
+        // 过滤掉没有实际变更的文件
+        val effectiveChanges = fileChanges.filter { it.finalContent.isNotEmpty() }
+        if (effectiveChanges.isEmpty()) {
+            return Result.success("没有需要提交的变更")
+        }
+        
+        return try {
+            val settings = KiwiSettings.getInstance(project)
+            val token = settings.state.privateToken
+            val projectId = settings.state.projectId
+            val baseApiUrl = "https://code.alibaba-inc.com/api/v3"
+            val apiUrl = "$baseApiUrl/projects/$projectId/repository/commits"
+            
+            // 构建 actions 数组
+            val actionsJson = effectiveChanges.joinToString(",\n") { change ->
+                val action = if (change.isCreate) "create" else "update"
+                val base64Content = Base64.getEncoder().encodeToString(change.finalContent.toByteArray(StandardCharsets.UTF_8))
+                val escapedPath = change.filePath.replace("\"", "\\\"")
+                """{
+                    "action": "$action",
+                    "file_path": "$escapedPath",
+                    "content": "$base64Content",
+                    "encoding": "base64"
+                }"""
+            }
+            
+            val escapedMessage = commitMessage.replace("\"", "\\\"")
+            val requestBody = """{
+                "branch_name": "$branch",
+                "commit_message": "$escapedMessage",
+                "actions": [$actionsJson]
+            }""".trimIndent()
+            
+            logger.info("批量提交 ${effectiveChanges.size} 个文件到 $branch")
+            
+            val connection = URI(apiUrl).toURL().openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            connection.setRequestProperty("Private-Token", token)
+            
+            connection.outputStream.use { os ->
+                OutputStreamWriter(os, StandardCharsets.UTF_8).use { writer ->
+                    writer.write(requestBody)
+                    writer.flush()
+                }
+            }
+            
+            val responseCode = connection.responseCode
+            val responseMessage = try {
+                if (responseCode in 200..299) {
+                    connection.inputStream.bufferedReader().readText()
+                } else {
+                    connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
+                }
+            } catch (e: Exception) {
+                e.message ?: "Unknown error"
+            }
+            
+            logger.info("批量提交响应码: $responseCode")
+            
+            if (responseCode in 200..299) {
+                Result.success("批量提交成功")
+            } else {
+                Result.failure(Exception("批量提交失败 ($responseCode): $responseMessage"))
+            }
+        } catch (e: Exception) {
+            logger.error("批量提交失败", e)
+            Result.failure(Exception("批量提交失败: ${e.message}"))
+        }
+    }
+    
+    /**
      * 从 en 和 zh_TW 文件中删除指定的 key
      * 用于确保后续自动翻译阶段可以重新生成这些 key 的翻译
      */
@@ -505,6 +692,17 @@ class CodePlatformService(private val project: Project) {
             logger.warn("获取文件内容失败", e)
             null
         }
+    }
+    
+    /**
+     * 获取 API 基础 URL 和项目配置（供内部使用）
+     */
+    internal fun getApiConfig(): Triple<String, String, String>? {
+        val settings = KiwiSettings.getInstance(project)
+        val token = settings.state.privateToken
+        val projectId = settings.state.projectId
+        if (token.isBlank() || projectId.isBlank()) return null
+        return Triple("https://code.alibaba-inc.com/api/v3", projectId, token)
     }
     
     companion object {

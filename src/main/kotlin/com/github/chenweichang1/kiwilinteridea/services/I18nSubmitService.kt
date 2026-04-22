@@ -37,7 +37,7 @@ class I18nSubmitService(private val project: Project) {
     }
     
     /**
-     * 提交单个 I18N 条目到仓库
+     * 提交单个 I18N 条目到仓库（中英文 + 删除其他语言 key 合并为一个 commit）
      */
     fun submitEntry(entry: I18nEntry): SubmitResult {
         val settings = KiwiSettings.getInstance(project)
@@ -47,57 +47,77 @@ class I18nSubmitService(private val project: Project) {
         }
         
         return try {
-            // 构建提交内容
-            val newLine = entry.toPropertiesLine()
-            val commitMessage = settings.state.commitMessageTemplate
-                .replace("{key}", entry.key)
+            val codePlatformService = CodePlatformService.getInstance(project)
+            val branch = settings.state.targetBranch
+            val zhFilePath = settings.state.zhPropertiesPath
+            val commitMessage = settings.state.commitMessageTemplate.replace("{key}", entry.key)
             
             logger.info("准备提交 I18N 文案: ${entry.key}")
             
-            // 使用 CodePlatformService 提交
-            val codePlatformService = CodePlatformService.getInstance(project)
-            val result = codePlatformService.commitFile(
-                repoPath = settings.state.projectId,
-                branch = settings.state.targetBranch,
-                filePath = settings.state.zhPropertiesPath,
-                content = newLine,
-                commitMessage = commitMessage,
-                append = true
-            )
+            // 1. 准备中文文件变更
+            val zhContent = entry.toPropertiesLine()
+            val zhChange = codePlatformService.prepareFileChange(branch, zhFilePath, zhContent)
+                .getOrElse { return SubmitResult.Failure("准备中文文案失败: ${it.message}") }
             
-            result.fold(
-                onSuccess = { commitResult ->
-                    // 提交成功后更新本地缓存
-                    if (commitResult.changedCount > 0) {
+            val allChanges = mutableListOf<CodePlatformService.PreparedFileChange>()
+            if (zhChange.changedCount > 0) allChanges.add(zhChange)
+            
+            // 2. 准备英文文件变更
+            var enCommitResult: CodePlatformService.PreparedFileChange? = null
+            if (entry.hasEnValue()) {
+                val enFilePath = zhFilePath.replace("_zh.properties", "_en.properties")
+                if (enFilePath != zhFilePath) {
+                    val enContent = entry.toEnPropertiesLine()
+                    val enChange = codePlatformService.prepareFileChange(branch, enFilePath, enContent).getOrNull()
+                    if (enChange != null && enChange.changedCount > 0) {
+                        allChanges.add(enChange)
+                        enCommitResult = enChange
+                    }
+                }
+            }
+            
+            // 3. 准备删除其他语言文件中的 key（跳过已手动提供英文的 _en.properties）
+            if (zhChange.changedCount > 0) {
+                val keysToRemove = setOf(entry.key)
+                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(branch, zhFilePath, keysToRemove)
+                    .filterNot { change ->
+                        entry.hasEnValue() && change.filePath.endsWith("_en.properties")
+                    }
+                allChanges.addAll(removeChanges)
+            }
+            
+            // 4. 如果没有任何变更
+            if (allChanges.isEmpty()) {
+                val notifyMsg = "Key: ${entry.key} 已存在且内容相同，已跳过"
+                showNotification("I18N 文案录入", notifyMsg, NotificationType.INFORMATION)
+                return SubmitResult.Success(
+                    message = notifyMsg,
+                    added = 0, updated = 0, skipped = zhChange.skipped
+                )
+            }
+            
+            // 5. 批量提交所有文件变更为一个 commit
+            val batchResult = codePlatformService.batchCommitFiles(branch, commitMessage, allChanges)
+            
+            batchResult.fold(
+                onSuccess = {
+                    if (zhChange.changedCount > 0) {
                         I18nCacheService.getInstance(project).updateLocalCache(entry.key, entry.value)
                     }
-                    
-                    // 提交英文文案到 en 文件（如果有的话）
-                    if (entry.hasEnValue()) {
-                        submitEnglishEntries(
-                            listOf(entry),
-                            settings,
-                            codePlatformService
-                        )
-                    }
-                    
                     val notifyMsg = when {
-                        commitResult.skipped > 0 && commitResult.changedCount == 0 -> 
-                            "Key: ${entry.key} 已存在且内容相同，已跳过"
-                        commitResult.updated > 0 -> "Key: ${entry.key} 已更新"
+                        zhChange.skipped > 0 && zhChange.changedCount == 0 -> "Key: ${entry.key} 已存在且内容相同，已跳过"
+                        zhChange.updated > 0 -> "Key: ${entry.key} 已更新"
                         else -> "Key: ${entry.key} 已新增"
                     }
                     showNotification("I18N 文案录入", notifyMsg, NotificationType.INFORMATION)
                     SubmitResult.Success(
-                        message = commitResult.message,
-                        added = commitResult.added,
-                        updated = commitResult.updated,
-                        skipped = commitResult.skipped
+                        message = notifyMsg,
+                        added = zhChange.added, updated = zhChange.updated, skipped = zhChange.skipped
                     )
                 },
-                onFailure = { 
+                onFailure = {
                     showNotification("I18N 文案录入失败", it.message ?: "未知错误", NotificationType.ERROR)
-                    SubmitResult.Failure("提交失败: ${it.message}") 
+                    SubmitResult.Failure("提交失败: ${it.message}")
                 }
             )
         } catch (e: Exception) {
@@ -108,7 +128,7 @@ class I18nSubmitService(private val project: Project) {
     }
     
     /**
-     * 批量提交多个 I18N 条目
+     * 批量提交多个 I18N 条目（中英文 + 删除其他语言 key 合并为一个 commit）
      */
     fun submitEntries(entries: List<I18nEntry>): SubmitResult {
         if (entries.isEmpty()) {
@@ -122,71 +142,100 @@ class I18nSubmitService(private val project: Project) {
         }
         
         return try {
-            // 1. 提交中文文案到 zh 文件
-            val content = entries.joinToString("\n") { it.toPropertiesLine() }
+            val codePlatformService = CodePlatformService.getInstance(project)
+            val branch = settings.state.targetBranch
+            val zhFilePath = settings.state.zhPropertiesPath
+            
             val keys = entries.take(3).map { it.key }.joinToString(", ") + 
                 if (entries.size > 3) " 等${entries.size}条" else ""
             val commitMessage = "feat: 批量添加 I18N 文案 - $keys"
             
-            // 收集有英文翻译的条目
+            val allChanges = mutableListOf<CodePlatformService.PreparedFileChange>()
+            
+            // 1. 准备中文文件变更
+            val zhContent = entries.joinToString("\n") { it.toPropertiesLine() }
+            val zhChange = codePlatformService.prepareFileChange(branch, zhFilePath, zhContent)
+                .getOrElse { return SubmitResult.Failure("准备中文文案失败: ${it.message}") }
+            
+            if (zhChange.changedCount > 0) allChanges.add(zhChange)
+            
+            // 2. 准备英文文件变更
             val enEntries = entries.filter { it.hasEnValue() }
+            var enChange: CodePlatformService.PreparedFileChange? = null
+            if (enEntries.isNotEmpty()) {
+                val enFilePath = zhFilePath.replace("_zh.properties", "_en.properties")
+                if (enFilePath != zhFilePath) {
+                    val enContent = enEntries.joinToString("\n") { it.toEnPropertiesLine() }
+                    enChange = codePlatformService.prepareFileChange(branch, enFilePath, enContent).getOrNull()
+                    if (enChange != null && enChange.changedCount > 0) {
+                        allChanges.add(enChange)
+                    }
+                }
+            }
             
-            val codePlatformService = CodePlatformService.getInstance(project)
-            val result = codePlatformService.commitFile(
-                repoPath = settings.state.projectId,
-                branch = settings.state.targetBranch,
-                filePath = settings.state.zhPropertiesPath,
-                content = content,
-                commitMessage = commitMessage,
-                append = true
-            )
+            // 3. 准备删除其他语言文件中的 key（跳过已手动提供英文的 _en.properties）
+            if (zhChange.changedCount > 0) {
+                val changedKeys = entries.map { it.key }.toSet()
+                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(branch, zhFilePath, changedKeys)
+                    .filterNot { change ->
+                        enEntries.isNotEmpty() && change.filePath.endsWith("_en.properties")
+                    }
+                allChanges.addAll(removeChanges)
+            }
             
-            result.fold(
-                onSuccess = { commitResult ->
+            // 4. 如果没有任何变更
+            if (allChanges.isEmpty()) {
+                val notifyMsg = "没有需要变更的内容（${zhChange.skipped}条文案已存在且内容相同）"
+                showNotification("批量录入完成", notifyMsg, NotificationType.INFORMATION)
+                return SubmitResult.Success(
+                    message = notifyMsg,
+                    added = 0, updated = 0, skipped = zhChange.skipped
+                )
+            }
+            
+            // 5. 批量提交所有文件变更为一个 commit
+            val batchResult = codePlatformService.batchCommitFiles(branch, commitMessage, allChanges)
+            
+            batchResult.fold(
+                onSuccess = {
                     // 提交成功后批量更新本地缓存
-                    if (commitResult.changedCount > 0) {
+                    if (zhChange.changedCount > 0) {
                         val cacheEntries = entries.associate { it.key to it.value }
                         I18nCacheService.getInstance(project).updateLocalCacheBatch(cacheEntries)
                     }
                     
-                    // 2. 提交英文文案到 en 文件（如果有的话）
-                    var enCommitResult: CodePlatformService.CommitResult? = null
-                    if (enEntries.isNotEmpty()) {
-                        enCommitResult = submitEnglishEntries(enEntries, settings, codePlatformService)
-                    }
-                    
-                    // 构建通知消息，显示实际变更情况
+                    // 构建通知消息
                     val notifyMsg = buildString {
                         append("中文文案: ")
-                        if (commitResult.added > 0) append("新增 ${commitResult.added} 条")
-                        if (commitResult.updated > 0) {
+                        if (zhChange.added > 0) append("新增 ${zhChange.added} 条")
+                        if (zhChange.updated > 0) {
                             if (!endsWith(": ")) append("，")
-                            append("更新 ${commitResult.updated} 条")
+                            append("更新 ${zhChange.updated} 条")
                         }
-                        if (commitResult.skipped > 0) {
+                        if (zhChange.skipped > 0) {
                             if (!endsWith(": ")) append("，")
-                            append("跳过 ${commitResult.skipped} 条（已存在）")
+                            append("跳过 ${zhChange.skipped} 条（已存在）")
                         }
-                        if (enCommitResult != null) {
+                        if (enChange != null && enChange.changedCount > 0) {
                             append("\n英文文案: ")
-                            if (enCommitResult.added > 0) append("新增 ${enCommitResult.added} 条")
-                            if (enCommitResult.updated > 0) {
+                            if (enChange.added > 0) append("新增 ${enChange.added} 条")
+                            if (enChange.updated > 0) {
                                 if (!endsWith(": ")) append("，")
-                                append("更新 ${enCommitResult.updated} 条")
+                                append("更新 ${enChange.updated} 条")
                             }
-                            if (enCommitResult.skipped > 0) {
+                            if (enChange.skipped > 0) {
                                 if (!endsWith(": ")) append("，")
-                                append("跳过 ${enCommitResult.skipped} 条（已存在）")
+                                append("跳过 ${enChange.skipped} 条（已存在）")
                             }
                         }
                         if (isEmpty()) append("没有需要变更的内容")
                     }
                     showNotification("批量录入完成", notifyMsg, NotificationType.INFORMATION)
                     SubmitResult.Success(
-                        message = commitResult.message,
-                        added = commitResult.added,
-                        updated = commitResult.updated,
-                        skipped = commitResult.skipped
+                        message = "提交成功",
+                        added = zhChange.added,
+                        updated = zhChange.updated,
+                        skipped = zhChange.skipped
                     )
                 },
                 onFailure = { 
@@ -198,50 +247,6 @@ class I18nSubmitService(private val project: Project) {
             logger.error("批量提交失败", e)
             showNotification("批量录入失败", e.message ?: "未知错误", NotificationType.ERROR)
             SubmitResult.Failure("批量提交失败: ${e.message}")
-        }
-    }
-    
-    /**
-     * 提交英文文案到 en properties 文件
-     */
-    private fun submitEnglishEntries(
-        enEntries: List<I18nEntry>,
-        settings: KiwiSettings,
-        codePlatformService: CodePlatformService
-    ): CodePlatformService.CommitResult? {
-        return try {
-            val enFilePath = settings.state.zhPropertiesPath.replace("_zh.properties", "_en.properties")
-            if (enFilePath == settings.state.zhPropertiesPath) {
-                logger.warn("无法推导英文 properties 文件路径")
-                return null
-            }
-            
-            val enContent = enEntries.joinToString("\n") { it.toEnPropertiesLine() }
-            val enCommitMessage = "feat: 批量添加 I18N 英文文案 - ${enEntries.take(3).map { it.key }.joinToString(", ")}" +
-                if (enEntries.size > 3) " 等${enEntries.size}条" else ""
-            
-            val enResult = codePlatformService.commitFile(
-                repoPath = settings.state.projectId,
-                branch = settings.state.targetBranch,
-                filePath = enFilePath,
-                content = enContent,
-                commitMessage = enCommitMessage,
-                append = true
-            )
-            
-            enResult.fold(
-                onSuccess = { commitResult ->
-                    logger.info("英文文案提交成功: 新增 ${commitResult.added}，更新 ${commitResult.updated}，跳过 ${commitResult.skipped}")
-                    commitResult
-                },
-                onFailure = { 
-                    logger.warn("英文文案提交失败: ${it.message}")
-                    null
-                }
-            )
-        } catch (e: Exception) {
-            logger.warn("英文文案提交失败", e)
-            null
         }
     }
     
