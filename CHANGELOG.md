@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-05-07
+
+### Fixed
+
+- **批量提取增强**：`extractFromFile` 现在同时支持三参数和双参数 ErrorCode 模式，兼容只有 `("DPN.Key", "描述")` 的枚举定义
+
 ## [1.0.4] - 2026-05-07
 
 ### Changed
