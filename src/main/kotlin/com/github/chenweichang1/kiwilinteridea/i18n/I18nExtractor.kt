@@ -73,19 +73,40 @@ object I18nExtractor {
     
     /**
      * 从整个文件中提取所有 I18N 条目
+     * 同时尝试三参数模式和双参数模式
      */
     fun extractFromFile(fileContent: String): List<I18nEntry> {
         val entries = mutableListOf<I18nEntry>()
+        val foundKeys = mutableSetOf<String>()
         
-        val matcher = ERROR_CODE_PATTERN.matcher(fileContent)
-        while (matcher.find()) {
-            entries.add(
-                I18nEntry(
-                    key = matcher.group(2),
-                    value = matcher.group(3),
-                    sourceLocation = "file"
+        // 先匹配三参数模式
+        val matcher3 = ERROR_CODE_PATTERN.matcher(fileContent)
+        while (matcher3.find()) {
+            val key = matcher3.group(2)
+            if (foundKeys.add(key)) {
+                entries.add(
+                    I18nEntry(
+                        key = key,
+                        value = matcher3.group(3),
+                        sourceLocation = "file"
+                    )
                 )
-            )
+            }
+        }
+        
+        // 再匹配双参数模式（跳过已提取的 key）
+        val matcher2 = SIMPLE_PATTERN.matcher(fileContent)
+        while (matcher2.find()) {
+            val key = matcher2.group(2)
+            if (foundKeys.add(key)) {
+                entries.add(
+                    I18nEntry(
+                        key = key,
+                        value = matcher2.group(3),
+                        sourceLocation = "file"
+                    )
+                )
+            }
         }
         
         return entries
