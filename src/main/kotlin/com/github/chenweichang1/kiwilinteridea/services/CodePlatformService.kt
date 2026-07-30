@@ -42,7 +42,8 @@ class CodePlatformService(private val project: Project) {
         val isCreate: Boolean,
         val added: Int,
         val updated: Int,
-        val skipped: Int
+        val skipped: Int,
+        val changedKeys: Set<String> = emptySet()  // 实际新增或更新的 key（不含跳过的）
     ) {
         val changedCount: Int get() = added + updated
     }
@@ -387,11 +388,12 @@ class CodePlatformService(private val project: Project) {
             var added = 0
             var updated = 0
             var skipped = 0
+            val changedKeys = mutableSetOf<String>()
             
             for ((key, value) in newEntries) {
                 when {
-                    !existingEntries.containsKey(key) -> { added++; logger.info("新增: $key") }
-                    existingEntries[key] != value -> { updated++; logger.info("更新: $key") }
+                    !existingEntries.containsKey(key) -> { added++; changedKeys.add(key); logger.info("新增: $key") }
+                    existingEntries[key] != value -> { updated++; changedKeys.add(key); logger.info("更新: $key") }
                     else -> { skipped++; logger.info("跳过: $key") }
                 }
             }
@@ -403,7 +405,7 @@ class CodePlatformService(private val project: Project) {
             val submittedKeys = newEntries.keys
             val finalContent = rebuildPropertiesContent(existingContent, submittedKeys, newEntries)
             
-            Result.success(PreparedFileChange(filePath, finalContent, isCreate, added, updated, skipped))
+            Result.success(PreparedFileChange(filePath, finalContent, isCreate, added, updated, skipped, changedKeys))
         } catch (e: Exception) {
             logger.error("准备文件变更失败: $filePath", e)
             Result.failure(Exception("准备文件变更失败: ${e.message}"))
@@ -412,11 +414,13 @@ class CodePlatformService(private val project: Project) {
     
     /**
      * 准备从其他语言文件中删除指定 key 的变更
+     * @param enKeysProvided 已手动提供英文翻译的 key，这些 key 不从 _en.properties 中删除
      */
     fun prepareRemoveKeysFromOtherLocales(
         branch: String,
         zhFilePath: String,
-        keysToRemove: Set<String>
+        keysToRemove: Set<String>,
+        enKeysProvided: Set<String> = emptySet()
     ): List<PreparedFileChange> {
         val changes = mutableListOf<PreparedFileChange>()
         val settings = KiwiSettings.getInstance(project)
@@ -431,18 +435,25 @@ class CodePlatformService(private val project: Project) {
         
         for (localePath in otherLocalePaths) {
             if (localePath == zhFilePath) continue
+            // en 文件中跳过已手动提供英文的 key
+            val effectiveKeys = if (localePath.endsWith("_en.properties")) {
+                keysToRemove - enKeysProvided
+            } else {
+                keysToRemove
+            }
+            if (effectiveKeys.isEmpty()) continue
             try {
                 val encodedPath = java.net.URLEncoder.encode(localePath, "UTF-8")
                 val existingContent = getFileContentViaApi(baseApiUrl, projectId, branch, encodedPath, token)
                 if (existingContent.isNullOrEmpty()) continue
                 
                 val existingEntries = parsePropertiesContent(existingContent)
-                val keysToRemoveInFile = keysToRemove.filter { existingEntries.containsKey(it) }
+                val keysToRemoveInFile = effectiveKeys.filter { existingEntries.containsKey(it) }
                 if (keysToRemoveInFile.isEmpty()) continue
                 
-                logger.info("准备从 $localePath 删除 ${keysToRemoveInFile.size} 个 key")
+                logger.info("准备从 $localePath 删除 ${keysToRemoveInFile.size} 个 key: $keysToRemoveInFile")
                 val newContent = removeKeysFromContent(existingContent, keysToRemoveInFile.toSet())
-                changes.add(PreparedFileChange(localePath, newContent, false, 0, 0, 0))
+                changes.add(PreparedFileChange(localePath, newContent, false, 0, 0, 0, keysToRemoveInFile.toSet()))
             } catch (e: Exception) {
                 logger.warn("处理 $localePath 时发生错误", e)
             }
@@ -628,7 +639,7 @@ class CodePlatformService(private val project: Project) {
     /**
      * 从 properties 内容中删除指定的 key
      */
-    private fun removeKeysFromContent(content: String, keysToRemove: Set<String>): String {
+    internal fun removeKeysFromContent(content: String, keysToRemove: Set<String>): String {
         val resultLines = mutableListOf<String>()
         
         content.lines().forEach { line ->

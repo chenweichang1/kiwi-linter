@@ -76,13 +76,12 @@ class I18nSubmitService(private val project: Project) {
                 }
             }
             
-            // 3. 准备删除其他语言文件中的 key（跳过已手动提供英文的 _en.properties）
+            // 3. 准备删除其他语言文件中的 key（只删实际变更的 key，已手动提供英文的 key 不从 _en.properties 删除）
             if (zhChange.changedCount > 0) {
-                val keysToRemove = setOf(entry.key)
-                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(branch, zhFilePath, keysToRemove)
-                    .filterNot { change ->
-                        entry.hasEnValue() && change.filePath.endsWith("_en.properties")
-                    }
+                val enKeysProvided = if (entry.hasEnValue()) setOf(entry.key) else emptySet()
+                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(
+                    branch, zhFilePath, zhChange.changedKeys, enKeysProvided
+                )
                 allChanges.addAll(removeChanges)
             }
             
@@ -173,14 +172,23 @@ class I18nSubmitService(private val project: Project) {
                 }
             }
             
-            // 3. 准备删除其他语言文件中的 key（跳过已手动提供英文的 _en.properties）
+            // 3. 准备删除其他语言文件中的 key（只删实际变更的 key，已手动提供英文的 key 不从 _en.properties 删除）
             if (zhChange.changedCount > 0) {
-                val changedKeys = entries.map { it.key }.toSet()
-                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(branch, zhFilePath, changedKeys)
-                    .filterNot { change ->
-                        enEntries.isNotEmpty() && change.filePath.endsWith("_en.properties")
+                val enKeysProvided = enEntries.map { it.key }.toSet()
+                val removeChanges = codePlatformService.prepareRemoveKeysFromOtherLocales(
+                    branch, zhFilePath, zhChange.changedKeys, enKeysProvided
+                )
+                for (removeChange in removeChanges) {
+                    // 同一 commit 中同一文件只能有一个 action：若 en 文件已有新增变更，则在其基础上合并删除
+                    val existingIndex = allChanges.indexOfFirst { it.filePath == removeChange.filePath }
+                    if (existingIndex >= 0) {
+                        val existing = allChanges[existingIndex]
+                        val mergedContent = codePlatformService.removeKeysFromContent(existing.finalContent, removeChange.changedKeys)
+                        allChanges[existingIndex] = existing.copy(finalContent = mergedContent)
+                    } else {
+                        allChanges.add(removeChange)
                     }
-                allChanges.addAll(removeChanges)
+                }
             }
             
             // 4. 如果没有任何变更
